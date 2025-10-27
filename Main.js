@@ -10,6 +10,8 @@ function onOpen() {
       .addToUi();
 }
 
+const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+
 /**
  * Main function to start the PDF processing workflow.
  * Uses services to find dynamic folders, process files, and log data.
@@ -36,19 +38,26 @@ function processPdfsInFolder() {
     Logger.log('Found PDF files to process.');
 
     // 3. Process each file
+    // Convert files iterator to array for counting
+    const fileArr = [];
     while (files.hasNext()) {
-      const file = files.next();
+      fileArr.push(files.next());
+    }
+
+    for (let i = 0; i < fileArr.length; i++) {
+      const file = fileArr[i];
       const fileName = file.getName();
+      spreadsheet.toast(`Processing ${i + 1}/${fileArr.length} files, file name: "${fileName}"`);
       Logger.log(`Processing file: ${fileName}`);
 
       // 4. Extract data using GeminiService
       const extractedData = geminiService.extractInvoiceData(file);
-      
+
       if (extractedData) {
         // 5. Move file and log data using DriveService and SheetService
         file.moveTo(destFolder);
         Logger.log(`Moved ${fileName} to destination folder.`);
-        
+
         const newFileUrl = file.getUrl();
         sheetService.logData(extractedData, newFileUrl);
 
@@ -62,7 +71,7 @@ function processPdfsInFolder() {
 
   } catch (e) {
     Logger.log(`Error in processPdfsInFolder: ${e.toString()}`);
-    SpreadsheetApp.getUi().alert(`An error occurred: ${e.message}`);
+    SpreadsheetApp.getUi().alert(e);
   }
 }
 
@@ -89,24 +98,26 @@ function renameFilesFromSheet() {
     Logger.log(`Found ${rowsToRename.length} file(s) to rename.`);
 
     // 3. Process each row
-    for (const row of rowsToRename) {
+    for (let i = 0; i < rowsToRename.length; i++) {
+      const row = rowsToRename[i];
       try {
+        spreadsheet.toast(`Processing ${i + 1}/${rowsToRename.length} files, file name: "${row.noMonth}. VAT ${row.supplierVT} ${row.invoiceNo}"`);
         // Build the new name (uses Col M as per your last script)
         const newName = `${row.noMonth}. VAT ${row.supplierVT} ${row.invoiceNo}`;
-        
+
         const fileId = DriveService.extractIdFromUrl(row.fileUrl);
         if (!fileId) {
           Logger.log(`Skipping row ${row.rowIndex}: Could not parse file ID from URL: ${row.fileUrl}`);
           continue;
         }
-        
+
         // 4. Rename file
         const file = DriveApp.getFileById(fileId);
         file.setName(newName);
-        
+
         // 5. Update sheet
         sheetService.updateProgress(row.rowIndex);
-        
+
         Logger.log(`Renamed file for row ${row.rowIndex} to: ${newName}`);
         processedCount++;
 
@@ -119,6 +130,6 @@ function renameFilesFromSheet() {
     
   } catch (e) {
     Logger.log(`Error in renameFilesFromSheet: ${e.toString()}`);
-    ui.alert(`An error occurred: ${e.message}`);
+    SpreadsheetApp.getUi().alert(e);
   }
 }
